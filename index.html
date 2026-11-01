@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Action Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 15px;
+            background-color: #0d1117;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 100vh;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            color: #ff5722;
+        }
+        #hud {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 500px;
+            background: #161b22;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        .hud-val {
+            color: #58a6ff;
+        }
+        #status-box {
+            width: 100%;
+            max-width: 500px;
+            background: #21262d;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.2rem;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #f0883e;
+        }
+        #controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+            margin: 15px 0;
+        }
+        .fire-btn {
+            background-color: #238636;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 25px 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1b6629;
+            touch-action: manipulation;
+        }
+        .fire-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #1b6629;
+            background-color: #2ea043;
+        }
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .act-btn {
+            background-color: #1f6feb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 18px 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #1158c7;
+            touch-action: manipulation;
+        }
+        .act-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #1158c7;
+        }
+        #start-btn {
+            background-color: #da3633;
+            box-shadow: 0 4px 0 #b62324;
+            grid-column: span 2;
+            padding: 20px;
+            font-size: 1.3rem;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Audio Action Battle</h1>
+        <p style="margin: 5px 0 0 0; color: #8b949e;">हेडफोन वापरा (Use Headphones)</p>
+    </header>
+
+    <div id="hud" aria-label="खेळाची माहिती">
+        <div>स्कोअर: <span id="score-val" class="hud-val">0</span></div>
+        <div>आरोग्य (HP): <span id="hp-val" class="hud-val">100</span></div>
+        <div>गोळ्या: <span id="ammo-val" class="hud-val">7/7</span></div>
+    </div>
+
+    <div id="status-box" aria-live="assertive" role="alert">
+        खेळ सुरू करण्यासाठी 'खेळ सुरू करा' बटण दाबा.
+    </div>
+
+    <div id="controls-grid">
+        <button id="btn-left" class="fire-btn" aria-label="डावीकडे गोळी झाडा">डावीकडे (A)</button>
+        <button id="btn-center" class="fire-btn" aria-label="समोर गोळी झाडा">समोर (W)</button>
+        <button id="btn-right" class="fire-btn" aria-label="उजवीकडे गोळी झाडा">उजवीकडे (D)</button>
+    </div>
+
+    <div class="action-grid">
+        <button id="btn-reload" class="act-btn" aria-label="बंदूक रिलोड करा">रिलोड (R)</button>
+        <button id="btn-medkit" class="act-btn" aria-label="मेडकिट वापरा">मेडकिट (M)</button>
+        <button id="start-btn" class="act-btn" aria-label="खेळ सुरू किंवा रीस्टार्ट करा">खेळ सुरू करा</button>
+    </div>
+
+    <div id="sr-instructions" class="sr-only">
+        कीबोर्ड नियंत्रणे: डावीकडे गोळी झाडण्यासाठी A, समोर W किंवा स्पेस, उजवीकडे D, रिलोडसाठी R, आणि मेडकिटसाठी M दाबा.
+    </div>
+
+    <script>
+        let audioCtx = null;
+        let isGameRunning = false;
+        let score = 0;
+        let hp = 100;
+        let ammo = 7;
+        const MAX_AMMO = 7;
+        let medkits = 2;
+
+        let enemyPosition = 0;
+        let enemyDistance = 5;
+        let enemyTimer = null;
+
+        const statusBox = document.getElementById('status-box');
+        const scoreVal = document.getElementById('score-val');
+        const hpVal = document.getElementById('hp-val');
+        const ammoVal = document.getElementById('ammo-val');
+        const startBtn = document.getElementById('start-btn');
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.1;
+                utterance.lang = 'mr-IN';
+                window.speechSynthesis.speak(utterance);
+            }
+            statusBox.innerText = text;
+        }
+
+        function playGunfire() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+
+            const bufferSize = audioCtx.sampleRate * 0.4;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.08));
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1200, t);
+            filter.frequency.exponentialRampToValueAtTime(80, t + 0.35);
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(1.5, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.38);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start(t);
+
+            const osc = audioCtx.createOscillator();
+            const oscGain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(180, t);
+            osc.frequency.exponentialRampToValueAtTime(30, t + 0.25);
+            oscGain.gain.setValueAtTime(1.2, t);
+            oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+
+            osc.connect(oscGain);
+            oscGain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.25);
+        }
+
+        function playHitSound() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(450, t);
+            osc.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+            gain.gain.setValueAtTime(0.8, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.12);
+        }
+
+        function playFootstep(pan, distance) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            
+            const bufferSize = audioCtx.sampleRate * 0.08;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.sin((i / bufferSize) * Math.PI);
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+
+            const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+            if (panner) panner.pan.setValueAtTime(pan, t);
+
+            const gain = audioCtx.createGain();
+            const vol = Math.max(0.1, (6 - distance) / 5);
+            gain.gain.setValueAtTime(vol * 0.7, t);
+
+            if (panner) {
+                noise.connect(gain);
+                gain.connect(panner);
+                panner.connect(audioCtx.destination);
+            } else {
+                noise.connect(gain);
+                gain.connect(audioCtx.destination);
+            }
+            noise.start(t);
+        }
+
+        function playReloadSound() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.setValueAtTime(900, t + 0.1);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.25);
+        }
+
+        function playPlayerHurt() {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120, t);
+            osc.frequency.linearRampToValueAtTime(60, t + 0.3);
+            gain.gain.setValueAtTime(0.9, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.3);
+        }
+
+        function spawnEnemy() {
+            const directions = [-1, 0, 1];
+            enemyPosition = directions[Math.floor(Math.random() * directions.length)];
+            enemyDistance = 5;
+            announceEnemyDirection();
+        }
+
+        function announceEnemyDirection() {
+            playFootstep(enemyPosition, enemyDistance);
+        }
+
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            enemyDistance -= 1;
+            playFootstep(enemyPosition, enemyDistance);
+
+            if (enemyDistance <= 0) {
+                hp -= 25;
+                if (hp < 0) hp = 0;
+                hpVal.innerText = hp;
+                playPlayerHurt();
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+                if (hp <= 0) {
+                    gameOver();
+                    return;
+                } else {
+                    speak("शत्रूचा हल्ला! एचपी " + hp);
+                    spawnEnemy();
+                }
+            }
+        }
+
+        function fire(direction) {
+            if (!isGameRunning) return;
+
+            if (ammo <= 0) {
+                speak("गोळ्या संपल्या! रिलोड करा!");
+                return;
+            }
+
+            ammo -= 1;
+            ammoVal.innerText = ammo + "/" + MAX_AMMO;
+            playGunfire();
+            if (navigator.vibrate) navigator.vibrate(60);
+
+            if (direction === enemyPosition) {
+                setTimeout(() => {
+                    playHitSound();
+                    score += 10;
+                    scoreVal.innerText = score;
+                    speak("अचूक निशाणा!");
+                    spawnEnemy();
+                }, 100);
+            }
+        }
+
+        function reload() {
+            if (!isGameRunning) return;
+            if (ammo === MAX_AMMO) {
+                speak("बंदूक आधीच लोड आहे.");
+                return;
+            }
+            playReloadSound();
+            ammo = MAX_AMMO;
+            ammoVal.innerText = ammo + "/" + MAX_AMMO;
+            speak("रिलोड पूर्ण!");
+        }
+
+        function useMedkit() {
+            if (!isGameRunning) return;
+            if (medkits <= 0) {
+                speak("मेडकिट संपले आहेत!");
+                return;
+            }
+            if (hp >= 100) {
+                speak("आरोग्य पूर्ण आहे.");
+                return;
+            }
+            medkits -= 1;
+            hp = Math.min(100, hp + 40);
+            hpVal.innerText = hp;
+            speak("आरोग्य वाढले! एचपी " + hp);
+        }
+
+        function startGame() {
+            initAudio();
+            isGameRunning = true;
+            score = 0;
+            hp = 100;
+            ammo = MAX_AMMO;
+            medkits = 2;
+
+            scoreVal.innerText = score;
+            hpVal.innerText = hp;
+            ammoVal.innerText = ammo + "/" + MAX_AMMO;
+            startBtn.innerText = "खेळ सुरू आहे...";
+
+            speak("लढाई सुरू झाली! कान देऊन ऐका!");
+            spawnEnemy();
+
+            if (enemyTimer) clearInterval(enemyTimer);
+            enemyTimer = setInterval(gameLoop, 1400);
+        }
+
+        function gameOver() {
+            isGameRunning = false;
+            if (enemyTimer) clearInterval(enemyTimer);
+            startBtn.innerText = "पुन्हा खेळा";
+            speak("खेळ खल्लास! तुमचा एकूण स्कोअर " + score);
+        }
+
+        document.getElementById('btn-left').onclick = () => fire(-1);
+        document.getElementById('btn-center').onclick = () => fire(0);
+        document.getElementById('btn-right').onclick = () => fire(1);
+        document.getElementById('btn-reload').onclick = reload;
+        document.getElementById('btn-medkit').onclick = useMedkit;
+        startBtn.onclick = startGame;
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'a') fire(-1);
+            else if (key === 'w' || key === ' ') fire(0);
+            else if (key === 'd') fire(1);
+            else if (key === 'r') reload();
+            else if (key === 'm') useMedkit;
+        });
+    </script>
+</body>
+</html>
+
